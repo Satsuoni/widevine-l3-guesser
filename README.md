@@ -147,6 +147,62 @@ In any case, that investigation did not seem to lead anywhere, and in the end (a
 
 ### Extracting part of the exponent
 
+After staring at the wall of poorly decompiled code for a while, I realized that parts of it implement a simple Bignum multiplicaion algorithms, but instead of using linear arrays, they used arrays permuted by PRNG-like functions, so every arithmetic operation was preceded by permutation generator looking kind of like this:
+
+```
+ uint * PFUN_180119595(uint *param_1,uint *out,uint length,int param_4)
+
+{
+  byte *pbVar1;
+  uint uVar2;
+  ulonglong uVar3;
+  uint uVar4;
+  uint uVar5;
+  ulonglong uVar6;
+  bool bVar7;
+  
+  uVar6 = (ulonglong)(length * 4);
+  if (*(char *)((longlong)out + uVar6) != '\x02') {
+    do {
+      pbVar1 = (byte *)((longlong)out + uVar6);
+      bVar7 = *pbVar1 == 0;
+      *pbVar1 = *pbVar1 ^ bVar7 * (*pbVar1 ^ 1);
+    } while ((byte)(!bVar7 * *pbVar1) == '\x01');
+    if (bVar7) {
+      if (length != 0) {
+        uVar5 = param_4 * 0xe286515;
+        uVar3 = 0;
+        do {
+          uVar2 = param_1[uVar3];
+          uVar4 = uVar2 ^ uVar5;
+          out[uVar3] = uVar4;
+          uVar5 = uVar5 + uVar2 * uVar4;
+          uVar3 = uVar3 + 1;
+        } while (length != uVar3);
+      }
+      *(undefined *)((longlong)out + uVar6) = 2;
+    }
+  }
+  return out;
+}
+```
+
+Same function was used most of the time, but with different offsets and initial arrays, resulting in a variety of permutations. Regardless, I was able to roughly identify montgomery multiplications, subtractions and additions performed on 256-byte arrays (implying the use of 2048 bit keys). One of the most important factors was the use of "ADC" assemler command, mostly restricted to two areas of the code, which I tentatively identified as "signature generation" and "session key decryption". I concentrated on the former, since I could access and verify the output. Which did however raise the question about what kind of input the function took. More about that later. 
+
+Of course, sick, sadisitic minds behind the obfuscation did not use a straightforward exponentiation algorithms. As described in Google patent [US20160328543A1](https://patentimages.storage.googleapis.com/0c/f3/c0/08ce4394385810/US20160328543A1.pdf), they multiply input by constant and output by reversing constant, use permutation function to confuse memory layouts, and seem to use "split variables" at times, though not often in this case. In any case, resulting exponentiation function also has some additions which cancel each other in the end. 
+
+In order to extract the exponent from the code, I first logged most of the inputs and outputs of the functions that seemed to operate on bignum, unscrambling the permutation using the already generated tables in memory. Then, I used [python script](log_parsing/prfnd.py) to guess the operations performed on the numbers, and a [separate script](log_parsing/prfold.py) to map those operations into a tree. The second script went through several iterations as I tried various things, including adding [dual number](https://en.wikipedia.org/wiki/Dual_number) support in order to extract exponent from the result's derivative. Ultimately, I settled on simple single-variable tracing. Finding a route that did not lead to exponential explosion in number of polynomial powers was somewhat of a challenge, but eventually (after,once again, a week or two of work :| ) I succeded in extracting an exponent and multiplicative constant:
+
+```
+Integer sec_pwr("3551441281151793803468150009579234152846302559876786023474384116741665435201433229827460838178073195265052758445179713180253281489421418956836612831335004147646176505141530943528324883137600012405638129713792381026483382453797745572848181778529230302846010343984669300346417859153737685586930651901846172995428426406351792520589303063891856952065344275226656441810617840991639119780740882869045853963976689135919705280633103928107644634342854948241774287922955722249610590503749361988998785615792967601265193388327434138142757694869631012949844904296215183578755943228774880949418421910124192610317509870035781434478472005580772585827964297458804686746351314049144529869398920254976283223212237757896308731212074522690246629595868795188862406555084509923061745551806883194011498591777868205642389994190989922575357099560320535514451309411366278194983648543644619059240366558012360910031565467287852389667920753931835645260421");
+Integer sec_mul("0x15ba06219067ebfbe9ed0b5f446f1dca81c3276915b6cd27621bfefe5cf287146c108442d6a292d7fb2a74fe560c1a57ada6d586250ecf339ee05bc86b762a448c18748c701f15d1ec5c5d1e18e406cfda1466300c5e6bcfe3133b03f296c219c1064da6d8108cbb4974d697faacc1d84207b4554accc45654225bf1dd257726eab616a1abe7e49e1182fb3ad8530b90bad454fe27088653fee80dd11dce148490c5344b0bb307050d35ff2fccaeff59f754bc2b28d780fc328e801f5b9371c35f12916f2ba89b3ae9c16e3fbaaf9a45e59b25b34ac1e0650cc6989ca7e3cac5f80feefd47c5ae684f6b82c45c735d57d884519e52eae19ee41e9aa9d336451e");
+
+```
+
+An example of log and script output can be found in [log_parsing](/log_parsing) folder. 
+
+One can easily see that the exponent is 3072 bits in length, which is a lot longer than expected (2048). Obvisouly, since exponent is periodic, it can be extended to any length. It can be also confirmed that this is not a complete exponent, since the first bignum-like structure in the function does not match the encryption input. (Decryption of the RSA is easily done using public exponent, 65537). There is also no linear. or quadratic, or... (I checked polynomials to about 128th power) dependency. Which leads me to the following stage. 
+
 ### Descending into despair 
 
 ### Code lifting
@@ -160,4 +216,5 @@ In any case, that investigation did not seem to lead anywhere, and in the end (a
 https://datatracker.ietf.org/doc/html/rfc3447#page-36
 
 
+https://patentimages.storage.googleapis.com/0c/f3/c0/08ce4394385810/US20160328543A1.pdf
 
