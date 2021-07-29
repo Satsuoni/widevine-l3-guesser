@@ -1,0 +1,30 @@
+{
+  "manifest_version": 2,
+  "name": "Widevine Guesser",
+  "short_name": "WidevineGuesser",
+  "description": "Guesses at session key input and logs media keys from websites that use Widevine DRM",
+  "version": "1.0.0",
+  "permissions":
+  [
+
+  ],
+  "icons":
+  {
+
+  },
+  "browser_action": {
+
+  },
+  "content_scripts":
+  [
+    {
+      "matches": ["https://*/*"],
+      "js": ["content_script.js"],
+      "css": [],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "content_security_policy": "script-src 'self' 'wasm-eval'; object-src 'self'",
+  "web_accessible_resources": ["content_key_decryption.js", "eme_interception.js", "lib/*", "protobuf-generated/*","wasm/*"]
+}
