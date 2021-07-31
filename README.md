@@ -7,6 +7,7 @@
 - Some parts of code are copied from RFC documents, wikipedia, etc. *shrug*
 - Tldr: The result seems to work, but relies on code lifting into wasm module and lots of brute-forcing, resulting in about 15-minute wait for a single RSA decryption.
 - I am too lazy to improve on this.
+- Bignum arithmetics was taken from [CryptoPP](https://github.com/weidai11/cryptopp) library. I found it the easiest library to work with and easiest to compile into wasm as well. 
 
 ## Introduction
 
@@ -205,7 +206,80 @@ One can easily see that the exponent is 3072 bits in length, which is a lot long
 
 ### Descending into despair 
 
+If one were to look at the function where exponentiation takes place, one would not that it has far too many input parameters.
+
+```
+void HasMulAdc_18016d24d(byte* param_1, byte* param_2, byte* param_3, byte* param_4, byte * param_5,byte * out)
+```
+
+In there, Param_1 seems to be constant, or at least input-independent. It is still necessary to get the correct result, but can be represented by static array. Parameters from 2 to 5, however, do depend on input... somehow. They are also permuted excessively in loops by *ConstUser_18016b077* functions. These functions represent half of the input obfuscation, and are the reason why this repo id called "guesser". They use a sequence of runtime-generated lookup tables to perform a variety of functions on oddly encoded inputs. Sequences are also runtime generated or unpacked, I am not sure. Every call to that function contains sequence offset, processing length, etc, all combined together into a single 64bit number. Odd encoding in this case refers to the following: each X-byte number is split into X*4 chunks of 2 bits each, two more chunks are appended with what seems to be arbitrary numbers and the result is passed through one of the above Const functions, resulting in 3 bit(!) stored in each byte, like so (hex representation of 256-byte number into 1026 bytes):
+(I will call it long form from now on)
+
+```
+010506030600040701030601060303060006010000030100000301030004050106010006010106010300030600030100060101000103000606030303010001060600030301060303060300030601000100000006010103010300010101010101060100030300030303010006000003000301060100060106000000000600000003030402050003010001010003000600060106010601010100030601010303000103010405010003000303000601040506040506000606060600030600000103030300010601030006030000030001000600000601010603000001010001010000010001000000030603030000060006030303000001030405060306060401060000010301030601000600010001030103060101010606000006000004050001060006030304050600030306010001000606060600000003060006000301060600000100060003030001060600010306030003010300010303000001010606010300010101010006030000010103000301010101060001010405040207020205010000030603000606000100000006030600030104050001060300000600030000030303060003060600030606060000000001060606010003030101010104070205040506010600060004010603060300030101010303030300010301000000010001010300000600030101000601030300040501010600010001000000060000000000060301060301060100010101030000060405040501010106060006010001030103010101010106030600060104050103000001060604050006010100060306010300030000030600010101030606060301060301000100000003030100010103000003030405060601030000060106010600000000060000030600000601000001010006030004010601000006010000010001060301000103060106030003010306010601030101060106040702050000010300030300010601060103000004050103060405000401000000040501000303060006000106060306030606060103000003060301010000000606000300030003000104050103060303010606000601000100060301000601030103060600060004010000000304010301030000010003000603000100060006010000010303030600030104050006000601060006010600040503000001060306010300060000010003010606010401030103060301060006000000010303000003000006010304070501010405030100000300000000040101060000010600000106030306010103060000010001060601060000000303000300010303030101060601030001010300000301030106010600000601000006030000010100000604050001030603010006010106000601010601030301000001010601030000000001000603040106010306060101010000
+```
+
+Lookup tables in *ConstUser_18016b077* essentally map 11 bit number(2x3 bit+5bit "carry") to 8-bit number(3-bit output plus carry). There are also other tables in the code that work on larger number of bits. But, since input and outputs are permuted in random order (and possibly have a carry bit), I could not for the life of me figure out what each of the (several thousands of) tables actually *did*. Each operation seemed to invoke a new table, or at least, a new sequence offset. 
+
+In any event, we have 4 or those numbers somehow generated from input and presented to exponentiation function. Where they are split into 18-bytes overlapping increments, processed in a loop, compressed back to 4-byte integers and passed on into *yet another* function:
+
+```
+void ManyMutiplies_1801720e0
+(byte* param_1, byte* param_2, byte* param_3, byte* param_4, byte* param_5, byte* out)
+```
+
+Where... I have no idea :( I've spent a lot of time looking at the code, but to this day I have no idea what *exactly* it does to 4 input buffers. Those buffers do not seem to be representations of 256-byte bignums ( buffer length vary, but are mostly multiples of 90). A lot ofoperations involve preparations like
+
+```
+    do {
+        *(int*)(local_8f90 + lVar6 * 4) =
+            *(int*)(local_8f90 + lVar6 * 4) +
+            *(int*)(local_8500 + lVar6 * 4) *
+            *(int*)((longlong)DAT_18091b030 + (ulonglong)((uint)lVar6 & 7) * 4);
+        lVar6 = lVar6 + 1;
+    } while (lVar6 != 0x4a);
+```
+
+Which seem perform multiplication and addition of 4-byte integer while discarding the carry? Then there are operations like this:
+
+```
+     do {
+            uVar8 = (uVar8 >> 4) + *(longlong*)(DAT_18091af30 + (ulonglong)((uint)uVar8 & 0xf) * 8);
+            *(ulonglong*)(local_8f90 + lVar12 * 8 + 8) = uVar8;
+            lVar12 = lVar12 + 1;
+        } while (lVar12 != 0x10);
+        iVar46 = (int)lVar6;
+        lVar6 = *(longlong *)(&local_8f90[128]) * 0x434c3d5000000000 + *(longlong*)(&local_8f90[56]) * 0x7c7bcb1aebcb3c2b +
+            0x7ffc6ede4fe88090;
+```
+
+Which seem to use lookup tables (DAT_18091af30) to look up 8-byte carries? Yeah, to my great shame, I have no idea what I am looking at. The only thing that comes to mind is highly obfuscated [Schönhage–Strassen algorithm](https://en.wikipedia.org/wiki/Sch%C3%B6nhage%E2%80%93Strassen_algorithm), or something from that family, that is, something that involves Fourier or Number theoretic transform. That would allow some operations to be performed modulo power of two, or modulo power of two plus one, without using carry as much as simpler multiplication algorithms. So, if anyone has any good ideas, please raise an issue or pull request? Code is [available](/wasm_src/codelift.cpp)...
+ 
+
 ### Code lifting
+
+After spending far too much time staring dumbly on decompiler and trying to run code modifications in Ghidra emulator, I decided to try dumping decompiled code into c++ file and making it compile again, with the "bright" idea of "maybe manipulatinfg inputs will give me some insight". I believe that is what is called "code lifting"? That came with its own set of challenges. The major one was the fact that decompiler was confused by overlapping buffer accesses, and could not separate local variables properly. Other was that somebody in Ghidra decompiler team thought that accessing, say, last two bytes in uint64 should be represented as *variable._6_2* instead of, say *\((short\*)&variable)\[3\]*. One of those is not proper C... So I had to go through code and replace that. As well as guess at stack variable overlaps and split those, which took weeks of painstaking register comparison. 
+
+Next hurdle was a function that took two buffers already encoded into long form and spat out long form of almost-output. That one first ran table generation (unpacking?) and then jumped to runtime-generated point. Then it used a long array of addresses and values to jump over 6(?) possible code points and execute a variety of operations on data. The structure in the array looked somewhat like:
+
+```
+    struct jumper
+    {
+        uint64 par1;
+        short par2;
+        short par3;
+        short par4;
+        short next_jump_offset;
+    };
+```
+
+And the array was long... 5153 operations long. If my guess about Fourier transformation is correct, that would probably be the function that performs inverse transformation, but once again, no idea ;( 
+
+The final hurdle of the code-lifting, and the one that contributed the most to the wasm size, was constant extraction. Some constants were available from the beginning, while others, such as lookup tables, were generated at various points at runtime. There were over 600 constants used, so in the end I just automatically grabbed them from [memory dumps](/memory_dumps) with a python script without checking the appropriate legth, which resulted in a lot of overlap (it is better to have a too-long constant than access violation of undefined behavior). It is probably possible to cut the wasm size by at least half by carefully removing overlaps (and checking afterwards, since some seem necessary). 
+
+After performing all that, I managed to recreate *HasMulAdc_18016d24d* in c++ code. Unfortunately, I did not gain any insight. The dependencies of actual input number on input buffers seemed highy non-linear as well. After a lot of trial and error(s), I was left with no recourse but to recreate input function for signature, which, luckily, was not obfuscated by switch statement. Unlike previous version, hovewer, actual RSA message to be exponentiated was never in memory during runtime, so I had to trace its creation from protobuf message. 
+
+(to be continued)
 
 ### FaIlUrEs uPoN fAiLuReS
 
@@ -215,6 +289,6 @@ One can easily see that the exponent is 3072 bits in length, which is a lot long
 
 https://datatracker.ietf.org/doc/html/rfc3447#page-36
 
-
 https://patentimages.storage.googleapis.com/0c/f3/c0/08ce4394385810/US20160328543A1.pdf
 
+https://github.com/tomer8007/widevine-l3-decryptor/wiki/Reversing-the-old-Widevine-Content-Decryption-Module
