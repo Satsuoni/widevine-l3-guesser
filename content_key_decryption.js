@@ -29,6 +29,46 @@ function bytesToHex(bytes) {
 (async function() {
 
 // The public 2048-bit RSA key Widevine uses for Chrome devices in L3, on Windows
+WidevineCrypto.initLog=function()
+{
+    try
+    {
+        if(document.body)
+        {
+          var i = document.createElement('iframe'); i.style.display = 'none'; document.body.appendChild(i);
+          window.sconsole = i.contentWindow.console;  
+          if (window.sconsole)
+          this._log=window.sconsole.log;
+        }
+
+    }
+    catch
+    {
+        console.info("Init log failed");
+    }
+}
+WidevineCrypto._log=null;
+WidevineCrypto.log=function() {
+    if(this._log)
+    {
+        this._log.apply(null,arguments);
+        return;
+    }
+    if (window.sconsole)
+        this._log=window.sconsole.log;
+    else
+        this.initLog()
+     if(this._log)
+    {
+        this._log.apply(null,arguments);
+    }
+    else
+    {
+        //fallback
+        console.log.apply(null,arguments);
+    }
+}
+
 WidevineCrypto.Module= await WasmDsp();
 await WidevineCrypto.Module.ready;
 _freeStr=WidevineCrypto.Module._freeStr;
@@ -127,10 +167,10 @@ WidevineCrypto.tryDecodingKey=async function(encKey)
 
     let hex=bytesToHex(encKey);
     let res=this.tryUsingDecoder(hex);
-    console.log(hex);
+    this.log(hex);
    
-    console.log("Output");
-    console.log(res);
+    this.log("Output");
+    this.log(res);
     if(res.length<10)
     {
         throw "Could not remove padding, probably invalid key or decoding failure"
@@ -140,13 +180,14 @@ WidevineCrypto.tryDecodingKey=async function(encKey)
 
 WidevineCrypto.decryptContentKey = async function(licenseRequest, licenseResponse)
 {
+    await this.initLog();
     licenseRequest = SignedMessage.read(new Pbf(licenseRequest));
     licenseResponse = SignedMessage.read(new Pbf(licenseResponse));
     //console.log("Decrypting?")
     //console.log("Request (from us)")
-    console.log(licenseRequest)
+    this.log(licenseRequest)
     //console.log("Response")
-    console.log(licenseResponse)
+    this.log(licenseResponse)
     if (licenseRequest.type != SignedMessage.MessageType.LICENSE_REQUEST.value) return;
 
     license = License.read(new Pbf(licenseResponse.msg));
@@ -158,7 +199,7 @@ WidevineCrypto.decryptContentKey = async function(licenseRequest, licenseRespons
                                                               licenseRequest.signature, licenseRequest.msg)
     if (!signatureVerified)
     {
-        console.log("Can't verify license request signature; either the platform is wrong or the key has changed!");
+        this.log("Can't verify license request signature; either the platform is wrong or the key has changed!");
         return null;
     }
     var sessionKey=await this.tryDecodingKey(licenseResponse.session_key);
@@ -190,7 +231,7 @@ WidevineCrypto.decryptContentKey = async function(licenseRequest, licenseRespons
             CryptoJS.AES.decrypt({ ciphertext: arrayToWordArray(keyData) }, arrayToWordArray(encryptKey), { iv: arrayToWordArray(keyIv) }).words);
 
         contentKeys.push(decryptedKey);
-        console.log("WidevineDecryptor: Found key: " + toHexString(decryptedKey) + " (KID=" + toHexString(keyId) + ")");
+        this.log("WidevineDecryptor: Found key: " + toHexString(decryptedKey) + " (KID=" + toHexString(keyId) + ")");
     }
 
     return contentKeys[0];

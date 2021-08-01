@@ -1,5 +1,5 @@
+var Cryplo = {};
 injectScripts();
-var Module=null;
 async function injectScripts() 
 {
     await injectScript('lib/pbf.3.0.5.min.js');
@@ -9,6 +9,7 @@ async function injectScripts()
     await injectScript('content_key_decryption.js');
     await injectScript('eme_interception.js');
 }
+
 
 function injectScript(scriptName) 
 {
