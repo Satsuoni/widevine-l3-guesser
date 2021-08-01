@@ -90,7 +90,7 @@ EmeInterception.prototype.addListenersToNavigator_ = function()
 {
   if (navigator.listenersAdded_) 
     return;
-
+ console.log('Adding listeners to navigator');
   var originalRequestMediaKeySystemAccessFn = EmeInterception.extendEmeMethod(
       navigator,
       navigator.requestMediaKeySystemAccess,
@@ -114,7 +114,35 @@ EmeInterception.prototype.addListenersToNavigator_ = function()
     }.bind(this));
 
   }.bind(this);
+  if(navigator.mediaCapabilities)
+  {
+      if(navigator.mediaCapabilities.decodingInfo)
+      {
+            var originalDecodingInfoFn = EmeInterception.extendEmeMethod(
+      navigator.mediaCapabilities, navigator.mediaCapabilities.decodingInfo,"DecodingInfoCall");
+       navigator.mediaCapabilities.decodingInfo = function() 
+  {
+    var self = arguments[0];
+    //console.log(arguments);
+    // slice "It is recommended that a robustness level be specified" warning
+    var modifiedArguments = arguments;
+    //var modifiedOptions = EmeInterception.addRobustnessLevelIfNeeded(options);
+    //modifiedArguments[1] = modifiedOptions;
 
+    var result = originalDecodingInfoFn.apply(null, modifiedArguments);
+    // Attach listeners to returned MediaKeySystemAccess object
+    return result.then(function(res) 
+    {
+        //console.log(res);
+        if(res.keySystemAccess)
+      this.addListenersToMediaKeySystemAccess_(res.keySystemAccess);
+      return Promise.resolve(res);
+    }.bind(this));
+
+  }.bind(this);
+  
+      }
+  }
   navigator.listenersAdded_ = true;
 };
 
