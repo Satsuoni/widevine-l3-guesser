@@ -230,8 +230,8 @@ WidevineCrypto.decryptContentKey = async function(licenseRequest, licenseRespons
         var decryptedKey = wordToByteArray(
             CryptoJS.AES.decrypt({ ciphertext: arrayToWordArray(keyData) }, arrayToWordArray(encryptKey), { iv: arrayToWordArray(keyIv) }).words);
 
-        contentKeys.push(decryptedKey);
-        this.log("WidevineDecryptor: Found key: " + toHexString(decryptedKey) + " (KID=" + toHexString(keyId) + ")");
+        contentKeys.push(`${toHexString(keyId)}:${toHexString(decryptedKey)}`);
+        this.log("WidevineDecryptor: Found keys", contentKeys.join("\n"));
     }
 
     return contentKeys[0];
