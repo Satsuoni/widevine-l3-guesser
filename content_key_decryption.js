@@ -4,7 +4,6 @@ This is where the magic happens
 
 
 var WidevineCrypto = {};
-var _freeStr, stringToUTF8, writeArrayToMemory, UTF8ToString, stackSave, stackRestore, stackAlloc;
 
 
 // Convert a hex string to a byte array
@@ -24,6 +23,19 @@ function bytesToHex(bytes) {
     return hex.join("");
 }
 
+function sendMessagePromise( item) {
+    return new Promise((resolve, reject) => {
+        var event = new CustomEvent("PassToBackground", {detail: item});
+        window.dispatchEvent(event);
+        window.addEventListener("BackgroundReply", function(evt) {
+            if(evt.detail.value) {
+                resolve(evt.detail.value);
+            } else {
+                reject('Something wrong');
+            }
+        },{once:true});
+    });
+}
 
 
 (async function() {
@@ -69,76 +81,24 @@ WidevineCrypto.log=function() {
     }
 }
 
-WidevineCrypto.Module= await WasmDsp();
-await WidevineCrypto.Module.ready;
-_freeStr=WidevineCrypto.Module._freeStr;
-stringToUTF8=WidevineCrypto.Module.stringToUTF8;
-writeArrayToMemory=WidevineCrypto.Module.writeArrayToMemory;
-UTF8ToString=WidevineCrypto.Module.UTF8ToString;
-stackSave=WidevineCrypto.Module.stackSave;
-stackRestore=WidevineCrypto.Module.stackRestore;
-stackAlloc=WidevineCrypto.Module.stackAlloc;
-
-WidevineCrypto.getCFunc = function (ident) {
-  return this.Module[`_${ident}`]; // closure exported function
-}
-WidevineCrypto.scall = function (ident, returnType, argTypes, args, opts) {
-  const toC = {
-    string (str) {
-      let ret = 0;
-      if (str !== null && str !== undefined && str !== 0) {
-        const len = (str.length << 2) + 1;
-        ret = stackAlloc(len);
-        stringToUTF8(str, ret, len);
-      }
-      return ret;
-    },
-    array (arr) {
-      const ret = stackAlloc(arr.length);
-      writeArrayToMemory(arr, ret);
-      return ret;
-    }
-  };
-  function convertReturnValue (ret) {
-    if (returnType === 'string') return UTF8ToString(ret);
-    if (returnType === 'boolean') return Boolean(ret);
-    return ret;
-  }
-  const func = this.getCFunc(ident);
-  const cArgs = [];
-  let stack = 0;
-  if (args) {
-    for (let i = 0; i < args.length; i++) {
-      const converter = toC[argTypes[i]];
-      if (converter) {
-        if (stack === 0) stack = stackSave();
-        cArgs[i] = converter(args[i]);
-      } else {
-        cArgs[i] = args[i];
-      }
-    }
-  }
-  const _ret = func.apply(null, cArgs);
-  const ret = convertReturnValue(_ret);
-  _freeStr(_ret);
-  if (stack !== 0) stackRestore(stack);
-  return ret;
-}
-WidevineCrypto.swrap=function  (ident, returnType, argTypes, opts) {
-  argTypes = argTypes || [];
-  const numericArgs = argTypes.every((type) => type === 'number');
-  const numericRet = returnType !== 'string';
-  if (numericRet && numericArgs && !opts) {
-    return this.getCFunc(ident);
-  }
-  return function () {
-     
-    return this.scall(ident, returnType, argTypes, arguments, opts);
-  };
-}
-WidevineCrypto.tryUsingDecoder = WidevineCrypto.swrap('tryUsingDecoder', 'string', ['string']); 
+//WidevineCrypto.Module= await WasmDsp();
+//await WidevineCrypto.Module.ready;
+//_freeStr=WidevineCrypto.Module._freeStr;
+//stringToUTF8=WidevineCrypto.Module.stringToUTF8;
+//writeArrayToMemory=WidevineCrypto.Module.writeArrayToMemory;
+//UTF8ToString=WidevineCrypto.Module.UTF8ToString;
+//stackSave=WidevineCrypto.Module.stackSave;
+//stackRestore=WidevineCrypto.Module.stackRestore;
+//stackAlloc=WidevineCrypto.Module.stackAlloc;
 
 
+//WidevineCrypto.tryUsingDecoder = WidevineCrypto.swrap('tryUsingDecoder', 'string', ['string']); 
+
+WidevineCrypto.tryUsingDecoder = async function (data)
+{
+    var res=await sendMessagePromise({name:"dec",value:data});
+    return res;
+}
 WidevineCrypto.chromeRSAPublicKey = 
 `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvKg9eT9JPEnfVYYS50x3
@@ -166,7 +126,7 @@ WidevineCrypto.tryDecodingKey=async function(encKey)
 {
 
     let hex=bytesToHex(encKey);
-    let res=this.tryUsingDecoder(hex);
+    let res=await this.tryUsingDecoder(hex);
     this.log(hex);
    
     this.log("Output");

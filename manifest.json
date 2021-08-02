@@ -6,15 +6,19 @@
   "version": "1.0.0",
   "permissions":
   [
-
+ "webRequest"
   ],
   "icons":
   {
 
   },
+  "background": {
+    "page": "background/background.html"
+  },
   "browser_action": {
 
   },
+ 
   "content_scripts":
   [
     {

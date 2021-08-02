@@ -1,11 +1,16 @@
-var Cryplo = {};
+window.addEventListener("PassToBackground", function(evt) {
+  chrome.runtime.sendMessage(evt.detail,response => {
+            var event = new CustomEvent("BackgroundReply", {detail: response});
+  window.dispatchEvent(event);});
+}, false);
+
 injectScripts();
 async function injectScripts() 
 {
     await injectScript('lib/pbf.3.0.5.min.js');
     await injectScript('lib/cryptojs-aes_0.2.0.min.js');
     await injectScript('protobuf-generated/license_protocol.proto.js');
-    await injectScript('wasm/wasm_gsr.js');
+   // await injectScript('wasm/wasm_gsr.js');
     await injectScript('content_key_decryption.js');
     await injectScript('eme_interception.js');
 }
