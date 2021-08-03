@@ -40,6 +40,7 @@ function sendMessagePromise( item) {
 
 (async function() {
 
+WidevineCrypto.cryptoJS=CryptoJS;
 // The public 2048-bit RSA key Widevine uses for Chrome devices in L3, on Windows
 WidevineCrypto.initLog=function()
 {
@@ -138,7 +139,7 @@ WidevineCrypto.tryDecodingKey=async function(encKey)
     return new Uint8Array(hexToBytes(res));
 }
 
-WidevineCrypto.decryptContentKey = async function(licenseRequest, licenseResponse)
+WidevineCrypto.decryptContentKey = async function(sesid,licenseRequest, licenseResponse)
 {
     await this.initLog();
     licenseRequest = SignedMessage.read(new Pbf(licenseRequest));
@@ -173,7 +174,7 @@ WidevineCrypto.decryptContentKey = async function(licenseRequest, licenseRespons
 
     // calculate encrypt_key using CMAC
     var encryptKey = wordToByteArray(
-                    CryptoJS.CMAC(arrayToWordArray(new Uint8Array(sessionKey)), 
+                    this.cryptoJS.CMAC(arrayToWordArray(new Uint8Array(sessionKey)), 
                                   arrayToWordArray(new Uint8Array(context_enc))).words);
 
     // iterate the keys we got to find those we want to decrypt (the content key(s))
@@ -188,10 +189,10 @@ WidevineCrypto.decryptContentKey = async function(licenseRequest, licenseRespons
 
         // finally decrypt the content key
         var decryptedKey = wordToByteArray(
-            CryptoJS.AES.decrypt({ ciphertext: arrayToWordArray(keyData) }, arrayToWordArray(encryptKey), { iv: arrayToWordArray(keyIv) }).words);
+            this.cryptoJS.AES.decrypt({ ciphertext: arrayToWordArray(keyData) }, arrayToWordArray(encryptKey), { iv: arrayToWordArray(keyIv) }).words);
 
         contentKeys.push(decryptedKey);
-        this.log("WidevineDecryptor: Found key: " + toHexString(decryptedKey) + " (KID=" + toHexString(keyId) + ")");
+        this.log("WidevineDecryptor: Session: "+sesid+ " KID= " + toHexString(keyId)+" Key: "+toHexString(decryptedKey) );
     }
 
     return contentKeys[0];
