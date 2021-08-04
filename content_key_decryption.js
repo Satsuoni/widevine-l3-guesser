@@ -22,12 +22,14 @@ function bytesToHex(bytes) {
     }
     return hex.join("");
 }
-
+var _evid=10;
 function sendMessagePromise( item) {
     return new Promise((resolve, reject) => {
-        var event = new CustomEvent("PassToBackground", {detail: item});
+        var id=_evid;
+        _evid+=1;
+        var event = new CustomEvent("PassToBackground", {detail: {item:item,id:id}});
         window.dispatchEvent(event);
-        window.addEventListener("BackgroundReply", function(evt) {
+        window.addEventListener("BackgroundReply_"+id, function(evt) {
             if(evt.detail.value) {
                 resolve(evt.detail.value);
             } else {
