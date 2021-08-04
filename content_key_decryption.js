@@ -139,11 +139,11 @@ WidevineCrypto.tryDecodingKey=async function(encKey)
     return new Uint8Array(hexToBytes(res));
 }
 
-WidevineCrypto.decryptContentKey = async function(sesid,licenseRequest, licenseResponse)
+WidevineCrypto.decryptContentKey = async function(sesid,sdat)
 {
     await this.initLog();
-    licenseRequest = SignedMessage.read(new Pbf(licenseRequest));
-    licenseResponse = SignedMessage.read(new Pbf(licenseResponse));
+    licenseRequest = SignedMessage.read(new Pbf(sdat.licenseRequest));
+    licenseResponse = SignedMessage.read(new Pbf(sdat.licenseResponse));
     //console.log("Decrypting?")
     //console.log("Request (from us)")
     this.log(licenseRequest)
@@ -190,7 +190,7 @@ WidevineCrypto.decryptContentKey = async function(sesid,licenseRequest, licenseR
         // finally decrypt the content key
         var decryptedKey = wordToByteArray(
             this.cryptoJS.AES.decrypt({ ciphertext: arrayToWordArray(keyData) }, arrayToWordArray(encryptKey), { iv: arrayToWordArray(keyIv) }).words);
-
+        sdat.keys.set(toHexString(keyId),toHexString(decryptedKey));
         contentKeys.push(decryptedKey);
         this.log("WidevineDecryptor: Session: "+sesid+ " KID= " + toHexString(keyId)+" Key: "+toHexString(decryptedKey) );
     }

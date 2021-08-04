@@ -18,6 +18,7 @@ function SessionData(sess)
     this.self=sess;
     this.licenseRequest=null;
     this.licenseResponse=null;
+    this.keys=new Map();
 }
  /**
  * Gets called whenever an EME method is getting called or an EME event fires
@@ -67,14 +68,11 @@ EmeInterception.onOperation = function(operationType, args,target)
             c_sessions.set(sesid,sdat);
             if (sdat.licenseResponse!==null && sdat.licenseRequest!==null)
             {
-                WidevineCrypto.decryptContentKey(sesid,sdat.licenseRequest, sdat.licenseResponse);
+                WidevineCrypto.decryptContentKey(sesid,sdat);
+                c_sessions.set(sesid,sdat);
             }
         }
-
-        lastReceivedLicenseResponse = licenseResponse;
-
-        // OK, let's try to decrypt it, assuming the response correlates to the request
-        
+ 
     }
     else if (operationType == "KeyStatusesChangeEvent")
     {
