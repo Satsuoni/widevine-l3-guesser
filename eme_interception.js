@@ -161,11 +161,11 @@ EmeInterception.prototype.addListenersToNavigator_ = function()
        navigator.mediaCapabilities.decodingInfo = function() 
   {
     var self = arguments[0];
-    //console.log(arguments);
+    console.log(arguments);
     // slice "It is recommended that a robustness level be specified" warning
     var modifiedArguments = arguments;
-    //var modifiedOptions = EmeInterception.addRobustnessLevelIfNeeded(options);
-    //modifiedArguments[1] = modifiedOptions;
+    var modifiedOptions = EmeInterception.addRobustnessLevelIfNeededForDecodingInfo(arguments);
+    modifiedArguments = modifiedOptions;
 
     var result = originalDecodingInfoFn.apply(null, modifiedArguments);
     // Attach listeners to returned MediaKeySystemAccess object
@@ -442,7 +442,34 @@ EmeInterception.interceptEvent = function(type, event)
   EmeInterception.onOperation(type, event,null);
   return event;
 };
-
+EmeInterception.addRobustnessLevelIfNeededForDecodingInfo = function(options)
+{
+   for (var i = 0; i < options.length; i++)
+  {
+    var option = options[i];
+    if(!option.keySystemConfiguration) continue;
+    var video = option.keySystemConfiguration["video"];
+    var audio = option.keySystemConfiguration["audio"];
+    if (video != null)
+    {
+        if (video["robustness"]==undefined || !video["robustness"].length ||video["robustness"].length ==0)
+        {
+            video["robustness"]="SW_SECURE_CRYPTO";
+        }
+    }
+       if (audio != null)
+    {
+        if (audio["robustness"]==undefined || !audio["robustness"].length ||audio["robustness"].length ==0)
+        {
+            audio["robustness"]="SW_SECURE_CRYPTO";
+        }
+    }
+    option.keySystemConfiguration.video=video;
+    option.keySystemConfiguration.audio=audio;
+     options[i]=option;
+  }    
+  return options;
+}
 EmeInterception.addRobustnessLevelIfNeeded = function(options)
 {
   for (var i = 0; i < options.length; i++)
