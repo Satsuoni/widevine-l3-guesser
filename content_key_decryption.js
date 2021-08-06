@@ -30,8 +30,9 @@ function sendMessagePromise( item) {
         var event = new CustomEvent("PassToBackground", {detail: {item:item,id:id}});
         window.dispatchEvent(event);
         window.addEventListener("BackgroundReply_"+id, function(evt) {
-            if(evt.detail.value) {
-                resolve(evt.detail.value);
+  
+            if(evt.detail) {
+                resolve(evt.detail);
             } else {
                 reject('Something wrong');
             }
